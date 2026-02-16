@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FiFilter, FiRefreshCw, FiEye, FiEyeOff, FiX } from "react-icons/fi";
 
 function money(cents) {
   return `R$ ${(Number(cents || 0) / 100).toFixed(2)}`;
 }
-
 function fmtDate(s) {
   try {
     return new Date(s).toLocaleString("pt-BR");
@@ -22,10 +22,11 @@ function statusLabel(s) {
   return s || "-";
 }
 
+// Mantendo as cores das labels (badges) originais
 function statusColors(status) {
   if (status === "paid") return { bg: "#16a34a", fg: "#fff" };
-  if (status === "pending_payment") return { bg: "#111827", fg: "#fff" };
-  if (status === "canceled") return { bg: "#ef4444", fg: "#fff" };
+  if (status === "pending_payment") return { bg: "#1e293b", fg: "#fff" };
+  if (status === "canceled") return { bg: "#ef4444", fg: "#fff" }; // Vermelho mantido aqui
   return { bg: "#f59e0b", fg: "#111827" };
 }
 
@@ -35,623 +36,487 @@ function onlyDigits(s) {
 
 export default function AdminOrdersPage() {
   const [token, setToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [actingId, setActingId] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // busca geral (nome/telefone/id)
+  const [showFilters, setShowFilters] = useState(false);
   const [q, setQ] = useState("");
-
-  // busca exclusiva por ticket
   const [ticketQ, setTicketQ] = useState("");
-
-  const [statusFilter, setStatusFilter] = useState("all"); // all | pending_payment | paid | canceled | reserved
+  const [statusFilter, setStatusFilter] = useState("all");
 
   async function load() {
+    if (!token) return;
     setLoading(true);
-    setErrorMsg("");
     try {
       const res = await fetch("/api/admin/orders?limit=2000", {
         headers: { "x-admin-token": token },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Erro ao carregar pedidos");
+      if (!res.ok) throw new Error(data?.error || "Erro");
       setOrders(data.orders || []);
+      setShowFilters(false);
     } catch (e) {
-      setErrorMsg(e.message || "Erro");
+      setErrorMsg(e.message);
     } finally {
       setLoading(false);
     }
   }
 
   async function approve(orderId) {
-    if (!confirm("Confirmar pagamento?")) return;
+    if (!confirm("Aprovar pagamento?")) return;
     setActingId(orderId);
-    setErrorMsg("");
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/approve`, {
         method: "POST",
         headers: { "x-admin-token": token },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Erro ao aprovar");
       await load();
     } catch (e) {
-      setErrorMsg(e.message || "Erro");
+      alert("Erro ao aprovar");
     } finally {
       setActingId(null);
     }
   }
 
   async function cancel(orderId) {
-    if (!confirm("Cancelar pedido e liberar números?")) return;
+    if (!confirm("Cancelar pedido?")) return;
     setActingId(orderId);
-    setErrorMsg("");
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/cancel`, {
         method: "POST",
         headers: { "x-admin-token": token },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Erro ao cancelar");
       await load();
     } catch (e) {
-      setErrorMsg(e.message || "Erro");
+      alert("Erro ao cancelar");
     } finally {
       setActingId(null);
     }
   }
 
   const rows = useMemo(() => {
-    const list = (orders || []).map((o) => {
-      const nums = (o.order_items || [])
-        .map((x) => x.ticket_number)
-        .filter((n) => n !== null && n !== undefined)
-        .map((n) => Number(n))
+    let filtered = (orders || []).map((o) => ({
+      ...o,
+      numbers: (o.order_items || [])
+        .map((x) => Number(x.ticket_number))
         .filter((n) => !Number.isNaN(n))
-        .sort((a, b) => a - b);
-
-      return { ...o, numbers: nums };
-    });
-
+        .sort((a, b) => a - b),
+    }));
     const query = q.trim().toLowerCase();
-    const ticketDigits = onlyDigits(ticketQ.trim());
-    const ticketNumber = ticketDigits.length ? Number(ticketDigits) : null;
+    const tNum = ticketQ.trim().length ? Number(onlyDigits(ticketQ)) : null;
 
-    let filtered = list;
-
-    // status
-    if (statusFilter !== "all") {
+    if (statusFilter !== "all")
       filtered = filtered.filter((o) => o.status === statusFilter);
-    }
-
-    // filtro EXCLUSIVO por número (match exato)
-    if (ticketNumber !== null && !Number.isNaN(ticketNumber)) {
-      filtered = filtered.filter((o) =>
-        o.numbers.some((n) => n === ticketNumber),
-      );
-    }
-
-    // busca geral (NÃO usa numbers)
+    if (tNum !== null)
+      filtered = filtered.filter((o) => o.numbers.includes(tNum));
     if (query) {
-      filtered = filtered.filter((o) => {
-        const id = String(o.id || "").toLowerCase();
-        const name = String(o.buyer_name || "").toLowerCase();
-        const phone = String(o.buyer_phone || "").toLowerCase();
-        return (
-          id.includes(query) || name.includes(query) || phone.includes(query)
-        );
-      });
-    }
-
-    // pendentes primeiro, depois mais recentes
-    const rank = (s) => {
-      if (s === "pending_payment") return 0;
-      if (s === "reserved") return 1;
-      if (s === "paid") return 2;
-      if (s === "canceled") return 3;
-      return 9;
-    };
-
-    filtered.sort((a, b) => {
-      const r = rank(a.status) - rank(b.status);
-      if (r !== 0) return r;
-      return (
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      filtered = filtered.filter((o) =>
+        [o.buyer_name, o.buyer_phone, o.buyer_email, o.buyer_document].some(
+          (f) =>
+            String(f || "")
+              .toLowerCase()
+              .includes(query),
+        ),
       );
-    });
-
-    return filtered;
+    }
+    return filtered.sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at),
+    );
   }, [orders, q, ticketQ, statusFilter]);
-
-  const counts = useMemo(() => {
-    const total = orders.length;
-    const pending = orders.filter((o) => o.status === "pending_payment").length;
-    const reserved = orders.filter((o) => o.status === "reserved").length;
-    const paid = orders.filter((o) => o.status === "paid").length;
-    const canceled = orders.filter((o) => o.status === "canceled").length;
-    return { total, pending, reserved, paid, canceled };
-  }, [orders]);
 
   return (
     <div style={styles.page}>
-      {/* Header */}
-      <div style={styles.headerWrap}>
-        <div style={styles.header}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <div style={styles.kicker}>Admin</div>
-              <div style={styles.title}>Pedidos</div>
-              <div style={styles.sub}>
-                Total: <b>{counts.total}</b> • Aguardando:{" "}
-                <b>{counts.pending}</b> • Pagos: <b>{counts.paid}</b>
+      <header style={styles.headerWrap}>
+        <div style={styles.headerContent}>
+          <div style={styles.navMain}>
+            <div style={styles.tokenArea}>
+              <div style={styles.inputIconWrapper}>
+                <input
+                  type={showToken ? "text" : "password"}
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Token Admin"
+                  style={styles.tokenInput}
+                />
+                <button
+                  onClick={() => setShowToken(!showToken)}
+                  style={styles.iconBtn}
+                >
+                  {showToken ? <FiEyeOff /> : <FiEye />}
+                </button>
               </div>
+              <button onClick={load} disabled={loading} style={styles.syncBtn}>
+                <FiRefreshCw className={loading ? "spin" : ""} />
+                <span className="hide-mobile" style={{ marginLeft: 8 }}>
+                  Sincronizar
+                </span>
+              </button>
             </div>
-
             <button
-              onClick={load}
-              disabled={!token || loading}
-              style={btnPrimary(!token || loading)}
+              onClick={() => setShowFilters(true)}
+              style={styles.filterToggle}
             >
-              {loading ? "Carregando..." : "Atualizar"}
+              <FiFilter /> Filtros {rows.length > 0 && `(${rows.length})`}
             </button>
           </div>
+        </div>
+      </header>
 
-          {/* Controls row */}
-          <div style={styles.controlsRow}>
-            <div style={styles.control}>
-              <div style={styles.label}>Token do Admin</div>
-              <input
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="Cole o ADMIN_TOKEN"
-                style={styles.input}
-              />
+      {showFilters && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0 }}>Filtros</h3>
+              <button
+                onClick={() => setShowFilters(false)}
+                style={styles.closeBtn}
+              >
+                <FiX size={24} />
+              </button>
             </div>
-
-            <div style={styles.control}>
-              <div style={styles.label}>Buscar (nome/telefone/id)</div>
+            <div style={styles.modalBody}>
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Ex: João, 8599..., pedaço do ID"
+                placeholder="Nome, Celular, CPF ou E-mail"
                 style={styles.input}
               />
-            </div>
-
-            <div style={styles.control}>
-              <div style={styles.label}>Buscar por número</div>
               <input
                 value={ticketQ}
                 onChange={(e) => setTicketQ(e.target.value)}
-                inputMode="numeric"
-                placeholder="Ex: 7 ou 0007"
+                placeholder="Número do Ticket"
                 style={styles.input}
               />
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  opacity: 0.65,
-                  color: "white",
-                }}
-              >
-                Procura match exato no ticket.
-              </div>
-            </div>
-
-            <div style={styles.control}>
-              <div style={styles.label}>Status</div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                style={{ ...styles.input, cursor: "pointer" }}
+                style={styles.input}
               >
-                <option value="all">Todos</option>
+                <option value="all">Todos os Status</option>
                 <option value="pending_payment">Aguardando</option>
-                <option value="reserved">Reservado</option>
                 <option value="paid">Pago</option>
                 <option value="canceled">Cancelado</option>
               </select>
-
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  opacity: 0.65,
-                  color: "white",
-                }}
+              <button
+                onClick={() => setShowFilters(false)}
+                style={styles.applyBtn}
               >
-                Resultados: <b>{rows.length}</b>
-              </div>
+                Aplicar Filtros
+              </button>
             </div>
           </div>
-
-          {/* quick actions */}
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              marginTop: 10,
-            }}
-          >
-            <button
-              onClick={() => {
-                setQ("");
-                setTicketQ("");
-                setStatusFilter("all");
-              }}
-              style={btnGhost()}
-            >
-              Limpar filtros
-            </button>
-          </div>
-
-          {errorMsg && (
-            <div style={styles.errorBox}>
-              <b>Erro:</b> {errorMsg}
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Content */}
-      <div style={styles.content}>
+      <main style={styles.content}>
         <div style={styles.grid}>
-          {rows.length === 0 ? (
-            <div style={{ opacity: 0.7, color: "white" }}>
-              Nenhum resultado. (Cole o token e clique em “Atualizar”)
-            </div>
-          ) : (
-            rows.map((o) => {
-              const sc = statusColors(o.status);
-              const canApprove = o.status === "pending_payment";
-              const canCancel = o.status !== "paid" && o.status !== "canceled";
-              const busy = actingId === o.id;
+          {rows.map((o) => {
+            const sc = statusColors(o.status);
+            const isCanceled = o.status === "canceled";
+            const isPaid = o.status === "paid";
+            const isPending = o.status === "pending_payment";
+            const busy = actingId === o.id;
 
-              return (
-                <div key={o.id} style={styles.card}>
-                  {/* Card header */}
-                  <div style={styles.cardHeader}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={styles.cardMetaLabel}>Comprador</div>
-                      <div style={styles.buyerName} title={o.buyer_name || ""}>
-                        {o.buyer_name || "-"}
-                      </div>
-                      <div style={styles.buyerSub}>
-                        {o.buyer_phone || "-"} • {fmtDate(o.created_at)}
-                      </div>
+            return (
+              <div key={o.id} style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={styles.buyerName}>
+                      {o.buyer_name || "Sem nome"}
                     </div>
+                    <div style={styles.buyerSub}>{o.buyer_phone}</div>
+                  </div>
+                  <span
+                    style={{ ...styles.badge, background: sc.bg, color: sc.fg }}
+                  >
+                    {statusLabel(o.status)}
+                  </span>
+                </div>
 
-                    <span
-                      style={{
-                        ...styles.badge,
-                        background: sc.bg,
-                        color: sc.fg,
-                      }}
-                    >
-                      {statusLabel(o.status)}
+                <div style={styles.buyerDetails}>
+                  <div style={styles.buyerExtra}>{o.buyer_email || "-"}</div>
+                  <div style={styles.buyerExtra}>{o.buyer_document || "-"}</div>
+                  <div
+                    style={{ ...styles.buyerExtra, marginTop: 4, opacity: 0.3 }}
+                  >
+                    {fmtDate(o.created_at)}
+                  </div>
+                </div>
+
+                <div style={styles.numsSection}>
+                  <div style={styles.numsWrap}>
+                    {o.numbers.slice(0, 10).map((n) => (
+                      <span key={n} style={styles.numChip}>
+                        {String(n).padStart(4, "0")}
+                      </span>
+                    ))}
+                    {o.numbers.length > 10 && (
+                      <span style={styles.moreChip}>
+                        +{o.numbers.length - 10}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={styles.cardFooter}>
+                  <div style={styles.totalArea}>
+                    <span style={styles.totalLabel}>TOTAL</span>
+                    <span style={styles.totalValue}>
+                      {money(o.total_cents)}
                     </span>
                   </div>
-
-                  {/* Numbers */}
-                  <div style={{ marginTop: 12 }}>
-                    <div style={styles.cardMetaLabel}>
-                      Números ({o.numbers.length})
-                    </div>
-                    <div style={styles.numsWrap}>
-                      {o.numbers.slice(0, 24).map((n) => (
-                        <span key={n} style={styles.numChip}>
-                          {String(n).padStart(4, "0")}
-                        </span>
-                      ))}
-                      {o.numbers.length > 24 && (
-                        <span style={styles.moreChip}>
-                          +{o.numbers.length - 24}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Total + id */}
-                  <div style={styles.cardFooterTop}>
-                    <div>
-                      <div style={styles.cardMetaLabel}>Total</div>
-                      <div style={styles.total}>{money(o.total_cents)}</div>
-                    </div>
-
-                    <div style={{ textAlign: "right", minWidth: 0 }}>
-                      <div style={styles.cardMetaLabel}>ID</div>
-                      <div style={styles.monoId} title={o.id}>
-                        {o.id}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions (always aligned at bottom) */}
                   <div style={styles.actions}>
+                    {/* Botão Aprovar: Verde se pendente, Cinza se não */}
                     <button
                       onClick={() => approve(o.id)}
-                      disabled={!canApprove || busy}
-                      style={btnAction(
-                        canApprove && !busy ? "#16a34a" : "#9ca3af",
-                      )}
+                      disabled={!isPending || busy}
+                      style={{
+                        ...styles.actionBtn,
+                        background: isPending ? "#16a34a" : "#334155",
+                        color: isPending ? "#fff" : "#64748b",
+                        cursor: isPending ? "pointer" : "not-allowed",
+                      }}
                     >
-                      Aprovar
+                      APROVAR
                     </button>
-
+                    {/* Botão Cancelar: Vermelho se puder cancelar, Cinza se não */}
                     <button
                       onClick={() => cancel(o.id)}
-                      disabled={!canCancel || busy}
-                      style={btnAction(
-                        canCancel && !busy ? "#ef4444" : "#9ca3af",
-                      )}
+                      disabled={isPaid || isCanceled || busy}
+                      style={{
+                        ...styles.actionBtn,
+                        background:
+                          !isPaid && !isCanceled ? "#ef4444" : "#334155",
+                        color: !isPaid && !isCanceled ? "#fff" : "#64748b",
+                        cursor:
+                          !isPaid && !isCanceled ? "pointer" : "not-allowed",
+                      }}
                     >
-                      Cancelar
+                      CANCELAR
                     </button>
                   </div>
-
-                  {o.status === "paid" && o.paid_at && (
-                    <div style={styles.smallNote}>
-                      Pago em: {fmtDate(o.paid_at)}
-                    </div>
-                  )}
-                  {o.status === "canceled" && o.canceled_at && (
-                    <div style={styles.smallNote}>
-                      Cancelado em: {fmtDate(o.canceled_at)}
-                    </div>
-                  )}
                 </div>
-              );
-            })
-          )}
+              </div>
+            );
+          })}
         </div>
-      </div>
+      </main>
+
+      <style jsx global>{`
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+        @media (max-width: 600px) {
+          .hide-mobile {
+            display: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
 
-/* ---------- Styles ---------- */
-
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#0b1220",
+    background: "#060a13",
+    color: "#fff",
+    fontFamily: "sans-serif",
   },
   headerWrap: {
     position: "sticky",
     top: 0,
-    zIndex: 50,
-    background: "rgba(11,18,32,0.72)",
+    zIndex: 100,
+    background: "rgba(11, 18, 32, 0.95)",
     backdropFilter: "blur(10px)",
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    borderBottom: "1px solid #1e293b",
+    padding: "12px",
   },
-  header: {
-    maxWidth: 1200,
-    margin: "0 auto",
-    padding: 16,
-  },
-  kicker: {
-    fontSize: 12,
-    letterSpacing: 0.4,
-    opacity: 0.8,
-    color: "rgba(255,255,255,0.78)",
-    fontWeight: 900,
-    textTransform: "uppercase",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 950,
-    color: "white",
-    marginTop: 2,
-  },
-  sub: {
-    marginTop: 6,
-    fontSize: 13,
-    color: "rgba(255,255,255,0.72)",
-  },
-
-  // ⬇️ agora 4 colunas (token / buscar / buscar número / status)
-  controlsRow: {
-    display: "grid",
-    gridTemplateColumns: "1.1fr 1fr 0.8fr 0.7fr",
-    gap: 12,
-    marginTop: 14,
-  },
-  control: {
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.10)",
-    borderRadius: 14,
-    padding: 12,
-  },
-  label: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.75)",
-    fontWeight: 900,
-  },
-  input: {
-    marginTop: 8,
+  headerContent: { maxWidth: 1200, margin: "0 auto" },
+  navMain: { display: "flex", gap: 10, flexWrap: "wrap" },
+  tokenArea: { display: "flex", gap: 8, flex: 1, minWidth: "260px" },
+  inputIconWrapper: { position: "relative", flex: 1 },
+  tokenInput: {
     width: "100%",
-    padding: "10px 12px",
+    background: "#000",
+    border: "1px solid #1e293b",
+    padding: "12px 40px 12px 12px",
     borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(0,0,0,0.25)",
-    color: "white",
+    color: "#fff",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  iconBtn: {
+    position: "absolute",
+    right: 10,
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "none",
+    border: "none",
+    color: "#475569",
+    cursor: "pointer",
+    fontSize: 18,
+  },
+  syncBtn: {
+    background: "#fff",
+    color: "#000",
+    border: "none",
+    borderRadius: 12,
+    padding: "0 16px",
+    height: 46,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    fontWeight: 800,
+  },
+  filterToggle: {
+    background: "#1e293b",
+    color: "#fff",
+    border: "1px solid #334155",
+    padding: "0 20px",
+    borderRadius: 12,
+    height: 46,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.8)",
+    zIndex: 200,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modal: {
+    background: "#0b1220",
+    width: "100%",
+    maxWidth: 400,
+    borderRadius: 24,
+    padding: 24,
+  },
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  closeBtn: {
+    background: "none",
+    border: "none",
+    color: "#fff",
+    cursor: "pointer",
+  },
+  modalBody: { display: "flex", flexDirection: "column", gap: 12 },
+  input: {
+    background: "#060a13",
+    border: "1px solid #1e293b",
+    padding: "14px",
+    borderRadius: 12,
+    color: "#fff",
     outline: "none",
   },
-  errorBox: {
-    marginTop: 12,
-    borderRadius: 14,
-    padding: 12,
-    background: "rgba(239,68,68,0.12)",
-    border: "1px solid rgba(239,68,68,0.28)",
-    color: "white",
+  applyBtn: {
+    background: "#fff",
+    color: "#000",
+    padding: "16px",
+    borderRadius: 12,
+    fontWeight: 900,
+    border: "none",
+    marginTop: 8,
+    cursor: "pointer",
   },
-  content: {
-    maxWidth: 1200,
-    margin: "0 auto",
-    padding: 16,
-  },
+  content: { maxWidth: 1200, margin: "0 auto", padding: "20px" },
   grid: {
     display: "grid",
-    gap: 14,
-    gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
-    alignItems: "stretch",
+    gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+    gap: 16,
   },
   card: {
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.04))",
-    boxShadow: "0 18px 40px rgba(0,0,0,0.25)",
-    padding: 14,
+    background: "#111827",
+    border: "1px solid #1e293b",
+    borderRadius: 20,
+    padding: 18,
     display: "flex",
     flexDirection: "column",
-    minHeight: 250,
   },
   cardHeader: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 12,
     alignItems: "flex-start",
-  },
-  badge: {
-    padding: "6px 10px",
-    borderRadius: 999,
-    fontWeight: 950,
-    fontSize: 12,
-    whiteSpace: "nowrap",
-    border: "1px solid rgba(255,255,255,0.18)",
-  },
-  cardMetaLabel: {
-    fontSize: 12,
-    fontWeight: 900,
-    color: "rgba(255,255,255,0.70)",
+    marginBottom: 14,
   },
   buyerName: {
-    marginTop: 4,
     fontSize: 16,
-    fontWeight: 950,
-    color: "white",
+    fontWeight: 900,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-    maxWidth: 280,
   },
-  buyerSub: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "rgba(255,255,255,0.62)",
+  buyerSub: { fontSize: 13, opacity: 0.5 },
+  badge: {
+    fontSize: 10,
+    fontWeight: 900,
+    padding: "4px 8px",
+    borderRadius: 6,
+    textTransform: "uppercase",
   },
-  numsWrap: {
-    marginTop: 10,
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
+  buyerDetails: {
+    marginBottom: 14,
+    padding: "10px 0",
+    borderTop: "1px solid rgba(255,255,255,0.05)",
   },
+  buyerExtra: { fontSize: 12, opacity: 0.6, marginBottom: 2 },
+  numsSection: {
+    background: "rgba(0,0,0,0.2)",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  numsWrap: { display: "flex", flexWrap: "wrap", gap: 5 },
   numChip: {
-    height: 28,
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "0 10px",
-    borderRadius: 999,
-    background: "rgba(17,24,39,0.6)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    color: "white",
+    background: "#1e293b",
+    padding: "4px 6px",
+    borderRadius: 4,
+    fontSize: 11,
     fontFamily: "monospace",
-    fontSize: 12,
-    fontWeight: 900,
   },
-  moreChip: {
-    height: 28,
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "0 10px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px dashed rgba(255,255,255,0.18)",
-    color: "rgba(255,255,255,0.88)",
-    fontSize: 12,
-    fontWeight: 900,
+  moreChip: { fontSize: 11, opacity: 0.3 },
+  cardFooter: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    borderTop: "1px solid rgba(255,255,255,0.05)",
+    paddingTop: 14,
+    marginTop: "auto",
   },
-  cardFooterTop: {
-    marginTop: 14,
+  totalArea: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-end",
+    alignItems: "center",
   },
-  total: {
-    marginTop: 4,
-    fontSize: 18,
-    fontWeight: 950,
-    color: "white",
-  },
-  monoId: {
-    marginTop: 4,
-    fontFamily: "monospace",
+  totalLabel: { fontSize: 10, fontWeight: 800, opacity: 0.3 },
+  totalValue: { fontSize: 20, fontWeight: 900 },
+  actions: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
+  actionBtn: {
+    border: "none",
+    padding: "14px",
+    borderRadius: 12,
+    fontWeight: 900,
     fontSize: 11,
-    color: "rgba(255,255,255,0.68)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    maxWidth: 180,
-  },
-  actions: {
-    marginTop: "auto",
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
-    paddingTop: 14,
-  },
-  smallNote: {
-    marginTop: 10,
-    fontSize: 12,
-    color: "rgba(255,255,255,0.60)",
+    transition: "0.2s",
   },
 };
-
-function btnPrimary(disabled) {
-  return {
-    padding: "10px 12px",
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: disabled ? "rgba(156,163,175,0.25)" : "rgba(255,255,255,0.10)",
-    color: "white",
-    fontWeight: 950,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-}
-
-function btnGhost() {
-  return {
-    padding: "8px 12px",
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.06)",
-    color: "white",
-    fontWeight: 900,
-    cursor: "pointer",
-  };
-}
-
-function btnAction(bg) {
-  return {
-    height: 40,
-    borderRadius: 14,
-    border: "none",
-    background: bg,
-    color: "white",
-    fontWeight: 950,
-    cursor: bg === "#9ca3af" ? "not-allowed" : "pointer",
-  };
-}
