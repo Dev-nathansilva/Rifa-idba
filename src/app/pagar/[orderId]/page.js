@@ -133,8 +133,8 @@ export default function PagarPage() {
   return (
     <div style={styles.page}>
       <div style={styles.container}>
-        <header style={styles.header}>
-          <div>
+        <header className="flex-col md:flex-row" style={styles.header}>
+          <div className="w-full text-center md:text-left">
             <div style={styles.kicker}>Pagamento</div>
             <h1 style={styles.title}>Finalizar Compra</h1>
           </div>

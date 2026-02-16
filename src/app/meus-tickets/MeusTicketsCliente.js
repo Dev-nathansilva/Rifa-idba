@@ -34,29 +34,79 @@ function statusStyle(status) {
   return { color: "#666", background: "#111", border: "1px solid #222" };
 }
 
+function onlyDigits(s) {
+  return String(s || "").replace(/\D/g, "");
+}
+
+function formatPhoneBR(value) {
+  const d = onlyDigits(value).slice(0, 11);
+
+  if (d.length === 0) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10)
+    return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+function isValidPhoneBR(value) {
+  const d = onlyDigits(value);
+
+  // 10 (fixo) ou 11 (celular) com DDD
+  if (!(d.length === 10 || d.length === 11)) return false;
+
+  // DDD não pode começar com 0
+  if (d[0] === "0") return false;
+
+  // opcional: celular normalmente começa com 9 (após DDD) quando tem 11 dígitos
+  // se quiser forçar:
+  // if (d.length === 11 && d[2] !== "9") return false;
+
+  return true;
+}
+
 export default function MeusTicketsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const raffleId = searchParams.get("raffleId") || "";
 
   const [phone, setPhone] = useState("");
+  const [touched, setTouched] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const canSearch = useMemo(
-    () => phone.replace(/\D/g, "").length >= 10,
-    [phone],
-  );
+  const phoneDigits = useMemo(() => onlyDigits(phone), [phone]);
+
+  const phoneError = useMemo(() => {
+    if (!touched) return "";
+    if (!phoneDigits) return "Digite seu telefone com DDD.";
+    if (!isValidPhoneBR(phone)) return "Telefone inválido. Ex: (85) 99999-8888";
+    return "";
+  }, [touched, phoneDigits, phone]);
+
+  const canSearch = useMemo(() => {
+    return isValidPhoneBR(phone) && !loading;
+  }, [phone, loading]);
 
   async function buscar() {
+    setTouched(true);
+
+    if (!isValidPhoneBR(phone)) {
+      setErrorMsg("Digite um telefone válido para buscar seus pedidos.");
+      setOrders([]);
+      return;
+    }
+
     setLoading(true);
     setErrorMsg("");
     setOrders([]);
 
     try {
       const qs = new URLSearchParams();
-      qs.set("phone", phone);
+      // ✅ manda só dígitos para funcionar mesmo com telefone salvo formatado no banco
+      qs.set("phone", phoneDigits);
       if (raffleId) qs.set("raffleId", raffleId);
 
       const res = await fetch(`/api/my-orders?${qs.toString()}`);
@@ -86,24 +136,40 @@ export default function MeusTicketsClient() {
         </header>
 
         <p style={styles.instruction}>
-          Digite seu telefone com DDD (somente números).
+          Digite seu telefone com DDD para consultar seus pedidos.
         </p>
 
         <div style={styles.searchRow}>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Ex: 85999998888"
-            style={styles.input}
-          />
+          <div style={{ flex: 1 }}>
+            <input
+              value={phone}
+              onChange={(e) => {
+                setPhone(formatPhoneBR(e.target.value));
+                if (errorMsg) setErrorMsg("");
+              }}
+              onBlur={() => setTouched(true)}
+              placeholder="Ex: (85) 99999-8888"
+              inputMode="tel"
+              autoComplete="tel"
+              style={{
+                ...styles.input,
+                ...(phoneError ? styles.inputError : null),
+              }}
+            />
+            {phoneError ? (
+              <div style={styles.fieldError}>{phoneError}</div>
+            ) : (
+              <div style={styles.hint}>Ex: (85) 99999-8888</div>
+            )}
+          </div>
 
           <button
             onClick={buscar}
-            disabled={!canSearch || loading}
+            disabled={!canSearch}
             style={{
               ...styles.primaryBtn,
-              opacity: !canSearch || loading ? 0.5 : 1,
-              cursor: !canSearch || loading ? "not-allowed" : "pointer",
+              opacity: !canSearch ? 0.5 : 1,
+              cursor: !canSearch ? "not-allowed" : "pointer",
             }}
           >
             {loading ? <div className="spinner-sm" /> : "Buscar"}
@@ -116,7 +182,7 @@ export default function MeusTicketsClient() {
           </div>
         )}
 
-        <div style={{ marginTop: 32 }}>
+        <div style={{ marginTop: 24 }}>
           {orders.length === 0 && !loading ? (
             <div style={styles.emptyState}>Nenhum pedido encontrado.</div>
           ) : (
@@ -124,6 +190,7 @@ export default function MeusTicketsClient() {
               const nums = (o.order_items || [])
                 .map((i) => i.ticket_number)
                 .sort((a, b) => a - b);
+
               const st = statusStyle(o.status);
 
               return (
@@ -238,12 +305,18 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     minWidth: 100,
+    height: 46,
   },
 
   instruction: { fontSize: 14, color: "#666", marginBottom: 12 },
-  searchRow: { display: "flex", gap: 10, marginBottom: 20 },
+  searchRow: {
+    display: "flex",
+    gap: 10,
+    marginBottom: 14,
+    alignItems: "flex-start",
+  },
   input: {
-    flex: 1,
+    width: "100%",
     background: "#0a0a0a",
     border: "1px solid #222",
     padding: "12px 16px",
@@ -252,6 +325,14 @@ const styles = {
     fontSize: 16,
     outline: "none",
   },
+  inputError: { border: "1px solid #ff4444" },
+  fieldError: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#ff4444",
+    fontWeight: 700,
+  },
+  hint: { marginTop: 8, fontSize: 12, color: "#444", fontWeight: 600 },
 
   errorBox: {
     background: "#1a0000",
@@ -280,6 +361,7 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: 20,
+    gap: 14,
   },
   orderId: { fontSize: 12, fontWeight: 800, color: "#444", marginBottom: 6 },
   statusBadge: {

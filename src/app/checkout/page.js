@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import LoadingScreen from "@/components/LoadingScreen";
 
 function pad4(n) {
   return String(n).padStart(4, "0");
@@ -243,9 +244,9 @@ export default function CheckoutPage() {
           ticketNumbers,
           buyer: {
             buyer_name: normalizeName(form.buyer_name),
-            buyer_phone: onlyDigits(form.buyer_phone),
+            buyer_phone: form.buyer_phone.trim(),
             buyer_email: form.buyer_email.trim(),
-            buyer_document: onlyDigits(form.buyer_document),
+            buyer_document: form.buyer_document.trim(),
           },
         }),
       });
@@ -263,29 +264,7 @@ export default function CheckoutPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div style={styles.loadingPage}>
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            border: "3px solid rgba(255, 255, 255, 0.05)",
-            borderTop: "3px solid #fff",
-            borderRadius: "50%",
-            animation: "spin 0.8s linear infinite",
-          }}
-        />
-        <style jsx global>{`
-          @keyframes spin {
-            100% {
-              transform: rotate(360deg);
-            }
-          }
-        `}</style>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
   return (
     <div style={styles.page}>

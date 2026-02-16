@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabasePublic } from "@/lib/supabasePublic";
 import Image from "next/image";
+import LoadingScreen from "@/components/LoadingScreen";
 
 function pad4(n) {
   return String(n).padStart(4, "0");
@@ -229,31 +230,7 @@ export default function RifaPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div style={styles.loadingPage}>
-        <div className="spinner-main" />
-        <style jsx>{`
-          .spinner-main {
-            width: 48px;
-            height: 48px;
-            border: 3px solid rgba(255, 255, 255, 0.05);
-            border-top: 3px solid #fff;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-          }
-          @keyframes spin {
-            0% {
-              transform: rotate(0deg);
-            }
-            100% {
-              transform: rotate(360deg);
-            }
-          }
-        `}</style>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen label="Carregando rifa..." />;
 
   return (
     <div style={styles.page}>
