@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabasePublic } from "@/lib/supabasePublic";
 import Image from "next/image";
 import LoadingScreen from "@/components/LoadingScreen";
+import { IoDocumentText } from "react-icons/io5";
 
 function pad4(n) {
   return String(n).padStart(4, "0");
@@ -249,11 +250,21 @@ export default function RifaPage() {
               />
             </div>
             <div style={styles.sub}>
-              Preço{" "}
+              Preço:{" "}
               <span style={styles.price}>
                 R$ {(raffle.ticket_price_cents / 100).toFixed(2)}
               </span>
             </div>
+
+            {/* Link do Regulamento adicionado aqui */}
+            <a
+              href="https://idba.framer.website/regulamento"
+              target="_blank"
+              style={styles.rulesLink}
+            >
+              <IoDocumentText size={16} />
+              <span>Regulamento</span>
+            </a>
           </div>
           <button
             onClick={() => router.push("/meus-tickets")}
@@ -710,5 +721,17 @@ const styles = {
     borderRadius: 10,
     cursor: "pointer",
     fontSize: 18,
+  },
+  rulesLink: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#888",
+    textDecoration: "none",
+    transition: "color 0.2s",
+    cursor: "pointer",
   },
 };
