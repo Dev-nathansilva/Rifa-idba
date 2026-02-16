@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabasePublic } from "@/lib/supabasePublic";
+import Image from "next/image";
 
 function pad4(n) {
   return String(n).padStart(4, "0");
@@ -16,37 +17,30 @@ export default function RifaPage() {
   const [raffle, setRaffle] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [selected, setSelected] = useState([]);
-  const [filter, setFilter] = useState("all"); // all | available | reserved | paid
+  const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // modal (quem comprou)
   const [buyerModalOpen, setBuyerModalOpen] = useState(false);
   const [buyerModalLoading, setBuyerModalLoading] = useState(false);
   const [buyerName, setBuyerName] = useState("");
   const [buyerTicketNumber, setBuyerTicketNumber] = useState(null);
 
-  // aviso de checkout pendente (seleção salva)
   const [hasSavedCheckout, setHasSavedCheckout] = useState(false);
 
-  // carregar rifa ativa + tickets
   useEffect(() => {
     async function load() {
       setLoading(true);
       setErrorMsg("");
-
       try {
         const r = await fetch("/api/raffles/active");
         const d = await r.json();
         if (!r.ok) throw new Error(d?.error || "Erro ao buscar rifa ativa");
-
         setRaffle(d.raffle);
-
         const r2 = await fetch(`/api/raffles/${d.raffle.id}/tickets`);
         const d2 = await r2.json();
         if (!r2.ok) throw new Error(d2?.error || "Erro ao buscar tickets");
-
         setTickets(d2.tickets || []);
       } catch (e) {
         setErrorMsg(e.message || "Erro");
@@ -54,14 +48,11 @@ export default function RifaPage() {
         setLoading(false);
       }
     }
-
     load();
   }, []);
 
-  // realtime (só quando raffle existir)
   useEffect(() => {
     if (!raffle?.id) return;
-
     const channel = supabasePublic
       .channel(`raffle:${raffle.id}`)
       .on(
@@ -75,22 +66,17 @@ export default function RifaPage() {
         (payload) => {
           const newRow = payload.new;
           const oldRow = payload.old;
-
           setTickets((prev) => {
             if (!newRow && oldRow)
               return prev.filter((t) => t.id !== oldRow.id);
-
             if (newRow && !oldRow) {
               if (prev.some((t) => t.id === newRow.id)) return prev;
               return [...prev, newRow].sort((a, b) => a.number - b.number);
             }
-
             if (newRow)
               return prev.map((t) => (t.id === newRow.id ? newRow : t));
-
             return prev;
           });
-
           if (newRow && newRow.status !== "available") {
             setSelected((prevSel) =>
               prevSel.filter((n) => n !== newRow.number),
@@ -99,13 +85,11 @@ export default function RifaPage() {
         },
       )
       .subscribe();
-
     return () => {
       supabasePublic.removeChannel(channel);
     };
   }, [raffle?.id]);
 
-  // carregar seleção salva
   useEffect(() => {
     try {
       const raw = localStorage.getItem(CHECKOUT_KEY);
@@ -118,7 +102,6 @@ export default function RifaPage() {
         ? parsed.ticketNumbers
         : [];
       setHasSavedCheckout(nums.length > 0);
-
       if (nums.length > 0) setSelected(nums.slice().sort((a, b) => a - b));
     } catch {
       setHasSavedCheckout(false);
@@ -145,7 +128,6 @@ export default function RifaPage() {
 
   function toggleTicket(t) {
     if (t.status !== "available") return;
-
     setSelected((prev) => {
       const exists = prev.includes(t.number);
       if (exists) return prev.filter((n) => n !== t.number);
@@ -156,18 +138,14 @@ export default function RifaPage() {
   function removeSelectedNumber(n) {
     setSelected((prev) => prev.filter((x) => x !== n));
   }
-
   function clearSelected() {
     setSelected([]);
   }
 
-  // agora só salva a seleção e vai pro checkout (sem raffleId)
   function participar() {
     if (!selected.length) return;
-
     setCreating(true);
     setErrorMsg("");
-
     try {
       localStorage.setItem(
         CHECKOUT_KEY,
@@ -185,7 +163,6 @@ export default function RifaPage() {
   function continueCheckout() {
     router.push("/checkout");
   }
-
   function forgetCheckout() {
     try {
       localStorage.removeItem(CHECKOUT_KEY);
@@ -193,13 +170,34 @@ export default function RifaPage() {
     setHasSavedCheckout(false);
   }
 
-  function statusStyle(status, isSelected) {
+  function ticketVisual(status, isSelected) {
+    const base = {
+      border: "1px solid #1a1a1a",
+      background: "#050505",
+      color: "#444",
+    };
     if (status === "paid")
-      return { background: "#16a34a", color: "white", opacity: 0.95 };
+      return {
+        ...base,
+        border: "1px solid #065f46",
+        background: "#064e3b44",
+        color: "#10b981",
+      };
     if (status === "reserved")
-      return { background: "#f59e0b", color: "black", opacity: 0.95 };
-    if (isSelected) return { background: "#111827", color: "white" };
-    return { background: "#f3f4f6", color: "#111827" };
+      return {
+        ...base,
+        border: "1px solid #92400e",
+        background: "#78350f44",
+        color: "#f59e0b",
+      };
+    if (isSelected)
+      return {
+        ...base,
+        border: "1px solid #fff",
+        background: "#fff",
+        color: "#000",
+      };
+    return base;
   }
 
   async function handleTicketClick(t) {
@@ -207,13 +205,11 @@ export default function RifaPage() {
       toggleTicket(t);
       return;
     }
-
     if (t.status === "paid") {
       setBuyerModalOpen(true);
       setBuyerModalLoading(true);
       setBuyerName("");
       setBuyerTicketNumber(t.number);
-
       try {
         const res = await fetch(`/api/tickets/${t.id}/buyer`);
         const data = await res.json();
@@ -226,385 +222,254 @@ export default function RifaPage() {
       }
       return;
     }
-
     if (t.status === "reserved") {
-      alert("Esse número está reservado no momento.");
+      setErrorMsg("Esse número está reservado.");
+      setTimeout(() => setErrorMsg(""), 2200);
       return;
     }
   }
 
-  if (loading) return <p style={{ padding: 20 }}>Carregando rifa...</p>;
-
-  if (!raffle) {
+  if (loading) {
     return (
-      <div style={{ padding: 20 }}>
-        <p>{errorMsg || "Nenhuma rifa ativa."}</p>
+      <div style={styles.loadingPage}>
+        <div className="spinner-main" />
+        <style jsx>{`
+          .spinner-main {
+            width: 48px;
+            height: 48px;
+            border: 3px solid rgba(255, 255, 255, 0.05);
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+          }
+          @keyframes spin {
+            0% {
+              transform: rotate(0deg);
+            }
+            100% {
+              transform: rotate(360deg);
+            }
+          }
+        `}</style>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 20, maxWidth: 900, margin: "0 auto" }}>
-      {/* topo */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 12,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1 style={{ marginBottom: 6 }}>{raffle.title}</h1>
-          <p style={{ marginTop: 0, opacity: 0.8 }}>
-            Preço por número:{" "}
-            <b>R$ {(raffle.ticket_price_cents / 100).toFixed(2)}</b>
-          </p>
-        </div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+    <div style={styles.page}>
+      <div style={styles.container}>
+        <header style={styles.top}>
+          <div style={{ flex: 1 }}>
+            <div style={styles.kicker}>{raffle.title}</div>
+            <div style={{ marginTop: 14 }}>
+              <Image
+                src="/logo-idba.png"
+                alt="Logo"
+                width={110}
+                height={55}
+                priority
+                style={{ objectFit: "contain" }}
+              />
+            </div>
+            <div style={styles.sub}>
+              Preço{" "}
+              <span style={styles.price}>
+                R$ {(raffle.ticket_price_cents / 100).toFixed(2)}
+              </span>
+            </div>
+          </div>
           <button
             onClick={() => router.push("/meus-tickets")}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 10,
-              border: "1px solid #e5e7eb",
-              background: "white",
-              cursor: "pointer",
-              fontWeight: 800,
-            }}
+            style={styles.ghostBtn}
           >
-            Ver meus tickets
+            Meus Tickets
           </button>
-        </div>
-      </div>
+        </header>
 
-      {/* banner: checkout pendente */}
-      {hasSavedCheckout && (
-        <div
-          style={{
-            marginTop: 10,
-            padding: 12,
-            borderRadius: 10,
-            border: "1px solid #e5e7eb",
-            background: "#f8fafc",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <b>Você tem uma seleção salva</b>
-            <div style={{ opacity: 0.7, fontSize: 13 }}>
-              Você pode continuar do checkout para preencher seus dados.
+        {hasSavedCheckout && (
+          <div style={styles.banner}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: "700", color: "#fff", fontSize: 13 }}>
+                Carrinho pendente
+              </div>
+              <div style={{ opacity: 0.5, fontSize: 11 }}>
+                Deseja continuar de onde parou?
+              </div>
             </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              onClick={continueCheckout}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "none",
-                background: "#111827",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 900,
-              }}
-            >
-              Continuar checkout
-            </button>
-
-            <button
-              onClick={forgetCheckout}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid #e5e7eb",
-                background: "white",
-                cursor: "pointer",
-                fontWeight: 900,
-              }}
-            >
-              Esquecer
-            </button>
-          </div>
-        </div>
-      )}
-
-      {errorMsg && (
-        <div
-          style={{
-            background: "#fee2e2",
-            padding: 12,
-            borderRadius: 8,
-            marginBottom: 12,
-            marginTop: 12,
-          }}
-        >
-          <b>Erro:</b> {errorMsg}
-        </div>
-      )}
-
-      {/* filtros */}
-      <div
-        style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "12px 0" }}
-      >
-        <FilterBtn
-          active={filter === "all"}
-          label="Todos"
-          value={counts.total}
-          onClick={() => setFilter("all")}
-        />
-        <FilterBtn
-          active={filter === "available"}
-          label="Disponíveis"
-          value={counts.available}
-          onClick={() => setFilter("available")}
-        />
-        <FilterBtn
-          active={filter === "reserved"}
-          label="Reservados"
-          value={counts.reserved}
-          onClick={() => setFilter("reserved")}
-        />
-        <FilterBtn
-          active={filter === "paid"}
-          label="Pagos"
-          value={counts.paid}
-          onClick={() => setFilter("paid")}
-        />
-      </div>
-
-      {/* grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-          gap: 10,
-          marginTop: 10,
-        }}
-      >
-        {filteredTickets.map((t) => {
-          const isSelected = selected.includes(t.number);
-          const style = statusStyle(t.status, isSelected);
-
-          return (
-            <button
-              key={t.id}
-              onClick={() => handleTicketClick(t)}
-              style={{
-                padding: 14,
-                borderRadius: 10,
-                border: "1px solid rgba(0,0,0,0.08)",
-                cursor: "pointer",
-                opacity: t.status === "available" ? 1 : 0.95,
-                ...style,
-              }}
-            >
-              <div style={{ fontSize: 18, fontWeight: 700 }}>
-                {pad4(t.number)}
-              </div>
-              <div style={{ fontSize: 12, opacity: 0.85 }}>
-                {t.status === "available"
-                  ? "Disponível"
-                  : t.status === "reserved"
-                    ? "Reservado"
-                    : "Pago"}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* barra selecionados */}
-      <div
-        style={{
-          marginTop: 18,
-          padding: 12,
-          border: "1px solid #e5e7eb",
-          borderRadius: 10,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <b>Selecionados ({selected.length})</b>
-
-              <button
-                onClick={clearSelected}
-                disabled={selected.length === 0}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
-                  background: selected.length === 0 ? "#f3f4f6" : "white",
-                  cursor: selected.length === 0 ? "not-allowed" : "pointer",
-                  fontWeight: 800,
-                }}
-              >
-                Remover tudo
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={continueCheckout} style={styles.primaryBtn}>
+                Sim
+              </button>
+              <button onClick={forgetCheckout} style={styles.ghostBtn}>
+                Não
               </button>
             </div>
+          </div>
+        )}
 
-            <div
-              style={{
-                marginTop: 10,
-                display: "flex",
-                gap: 8,
-                flexWrap: "wrap",
-              }}
-            >
-              {selected.length === 0 ? (
-                <span style={{ opacity: 0.7 }}>Nenhum número selecionado</span>
-              ) : (
-                selected.map((n) => (
-                  <span
-                    key={n}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      background: "#111827",
-                      color: "white",
-                      padding: "6px 10px",
-                      borderRadius: 999,
-                    }}
-                  >
+        {errorMsg && <div style={styles.errorBox}>{errorMsg}</div>}
+
+        <div style={styles.filterSection}>
+          <div style={styles.filters}>
+            <FilterBtn
+              active={filter === "all"}
+              label="Todos"
+              value={counts.total}
+              onClick={() => setFilter("all")}
+            />
+            <FilterBtn
+              active={filter === "available"}
+              label="Livres"
+              value={counts.available}
+              onClick={() => setFilter("available")}
+            />
+            <FilterBtn
+              active={filter === "reserved"}
+              label="Reserva"
+              value={counts.reserved}
+              onClick={() => setFilter("reserved")}
+            />
+            <FilterBtn
+              active={filter === "paid"}
+              label="Pagos"
+              value={counts.paid}
+              onClick={() => setFilter("paid")}
+            />
+          </div>
+        </div>
+
+        <div style={styles.grid}>
+          {filteredTickets.map((t) => {
+            const isSelected = selected.includes(t.number);
+            const v = ticketVisual(t.status, isSelected);
+            return (
+              <button
+                key={t.id}
+                onClick={() => handleTicketClick(t)}
+                style={{ ...styles.ticketBtn, ...v }}
+              >
+                <div style={styles.ticketNum}>{pad4(t.number)}</div>
+                <div
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    marginTop: 2,
+                    opacity: 0.6,
+                  }}
+                >
+                  {t.status === "paid"
+                    ? "PAGO"
+                    : t.status === "reserved"
+                      ? "RES"
+                      : "INFO"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {selected.length > 0 && (
+        <div style={styles.bottomBar}>
+          <div style={styles.bottomInner}>
+            <div style={styles.selectionArea}>
+              <div style={styles.selectionHeader}>
+                <span style={{ fontWeight: 800, fontSize: 12 }}>
+                  {selected.length} Selecionados
+                </span>
+                <button onClick={clearSelected} style={styles.clearBtn}>
+                  Remover tudo
+                </button>
+              </div>
+
+              <div style={styles.chipsScroll}>
+                {selected.map((n) => (
+                  <span key={n} style={styles.chip}>
                     {pad4(n)}
                     <button
                       onClick={() => removeSelectedNumber(n)}
-                      style={{
-                        border: "none",
-                        background: "rgba(255,255,255,0.2)",
-                        color: "white",
-                        width: 22,
-                        height: 22,
-                        borderRadius: 999,
-                        cursor: "pointer",
-                        fontWeight: 900,
-                        lineHeight: "22px",
-                      }}
-                      title={`Remover ${pad4(n)}`}
+                      style={styles.chipX}
                     >
                       ×
                     </button>
                   </span>
-                ))
-              )}
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div style={{ textAlign: "right" }}>
-            <div style={{ opacity: 0.7 }}>Total</div>
-            <div style={{ fontSize: 20, fontWeight: 900 }}>
-              R$ {(totalCents / 100).toFixed(2)}
+            <div style={styles.actionArea}>
+              <div style={styles.totalValue}>
+                R$ {(totalCents / 100).toFixed(2)}
+              </div>
+              <button
+                onClick={participar}
+                disabled={creating}
+                style={styles.cta}
+              >
+                {creating ? "..." : "Participar"}
+              </button>
             </div>
-            <button
-              onClick={participar}
-              disabled={selected.length === 0 || creating}
-              style={{
-                marginTop: 10,
-                padding: "10px 14px",
-                borderRadius: 10,
-                border: "none",
-                background:
-                  selected.length === 0 || creating ? "#9ca3af" : "#111827",
-                color: "white",
-                cursor:
-                  selected.length === 0 || creating ? "not-allowed" : "pointer",
-                fontWeight: 900,
-              }}
-            >
-              {creating ? "Indo pro checkout..." : "Participar"}
-            </button>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* MODAL */}
       {buyerModalOpen && (
         <div
           onClick={() => setBuyerModalOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            zIndex: 50,
-          }}
+          style={styles.modalOverlay}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 420,
-              background: "white",
-              borderRadius: 12,
-              border: "1px solid #e5e7eb",
-              padding: 14,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 10,
-                alignItems: "center",
-              }}
-            >
-              <b>
-                Comprador do número{" "}
-                {buyerTicketNumber !== null ? pad4(buyerTicketNumber) : ""}
-              </b>
+          <div onClick={(e) => e.stopPropagation()} style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <span style={{ fontWeight: 700, fontSize: 14 }}>
+                Número {pad4(buyerTicketNumber)}
+              </span>
               <button
                 onClick={() => setBuyerModalOpen(false)}
-                style={{
-                  border: "none",
-                  background: "#f3f4f6",
-                  borderRadius: 10,
-                  padding: "6px 10px",
-                  cursor: "pointer",
-                  fontWeight: 900,
-                }}
+                style={styles.modalClose}
               >
-                Fechar
+                ×
               </button>
             </div>
-
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 16 }}>
               {buyerModalLoading ? (
-                <p>Buscando...</p>
+                <div className="spinner-small" />
               ) : (
-                <p style={{ fontSize: 18, fontWeight: 900, margin: 0 }}>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>
                   {buyerName}
-                </p>
+                </div>
               )}
             </div>
           </div>
         </div>
       )}
+
+      <style jsx global>{`
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        .spinner-small {
+          width: 20px;
+          height: 20px;
+          border: 2px solid rgba(255, 255, 255, 0.1);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+          height: 4px;
+          width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #333;
+          border-radius: 10px;
+        }
+      `}</style>
     </div>
   );
 }
@@ -613,18 +478,260 @@ function FilterBtn({ label, value, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      style={{
-        border: "1px solid #e5e7eb",
-        borderRadius: 999,
-        padding: "8px 12px",
-        cursor: "pointer",
-        background: active ? "#111827" : "white",
-        color: active ? "white" : "#111827",
-        fontWeight: 800,
-      }}
+      style={{ ...styles.filterBtn, ...(active ? styles.filterBtnActive : {}) }}
     >
-      <span style={{ opacity: active ? 1 : 0.7 }}>{label}:</span>{" "}
-      <span>{value}</span>
+      {label} <span style={{ opacity: 0.4, marginLeft: 4 }}>{value}</span>
     </button>
   );
 }
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "#000",
+    color: "#fff",
+    fontFamily: "sans-serif",
+  },
+  container: {
+    maxWidth: 650,
+    margin: "0 auto",
+    padding: "24px 16px 160px 16px",
+  },
+  loadingPage: {
+    minHeight: "100vh",
+    background: "#000",
+    display: "grid",
+    placeItems: "center",
+  },
+
+  top: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 30,
+  },
+  kicker: {
+    fontSize: 11,
+    fontWeight: 800,
+    opacity: 0.4,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  sub: { marginTop: 14, fontSize: 13, color: "#666" },
+  price: { color: "#fff", fontWeight: 800, marginLeft: 4 },
+
+  ghostBtn: {
+    background: "#111",
+    border: "1px solid #222",
+    color: "#fff",
+    padding: "10px 16px",
+    borderRadius: 10,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  primaryBtn: {
+    background: "#fff",
+    border: "none",
+    color: "#000",
+    padding: "10px 16px",
+    borderRadius: 10,
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
+  banner: {
+    background: "#0a0a0a",
+    border: "1px solid #222",
+    padding: 14,
+    borderRadius: 16,
+    display: "flex",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  errorBox: {
+    marginBottom: 20,
+    background: "#1a0000",
+    color: "#ff4444",
+    padding: 12,
+    borderRadius: 12,
+    fontSize: 12,
+    border: "1px solid #440000",
+    fontWeight: 600,
+  },
+
+  filterSection: { marginBottom: 24 },
+  filters: {
+    display: "flex",
+    gap: 8,
+    overflowX: "auto",
+    paddingBottom: 10,
+    WebkitOverflowScrolling: "touch",
+  },
+  filterBtn: {
+    flexShrink: 0,
+    background: "#000",
+    border: "1px solid #222",
+    color: "#888",
+    padding: "8px 16px",
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  filterBtnActive: {
+    border: "1px solid #fff",
+    color: "#fff",
+    background: "#111",
+  },
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(75px, 1fr))",
+    gap: 10,
+  },
+  ticketBtn: {
+    aspectRatio: "1/1",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    cursor: "pointer",
+    transition: "0.15s ease",
+    outline: "none",
+  },
+  ticketNum: {
+    fontSize: 16,
+    fontWeight: 800,
+    fontFamily: "monospace",
+    letterSpacing: -0.5,
+  },
+
+  // --- BOTÃO DE SELECIONADOS ---
+  bottomBar: {
+    position: "fixed",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: "16px",
+    background: "linear-gradient(to top, #000 70%, transparent)",
+    zIndex: 50,
+  },
+  bottomInner: {
+    maxWidth: 600,
+    margin: "0 auto",
+    background: "#111",
+    border: "1px solid #333",
+    borderRadius: 24,
+    padding: "16px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+    boxShadow: "0 20px 40px rgba(0,0,0,0.8)",
+  },
+  selectionArea: { minWidth: 0 },
+  selectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  clearBtn: {
+    background: "none",
+    border: "none",
+    color: "#f87171",
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: "pointer",
+    padding: 0,
+  },
+
+  chipsScroll: {
+    display: "flex",
+    gap: 8,
+    overflowX: "auto",
+    paddingBottom: 4,
+    scrollBehavior: "smooth",
+  },
+  chip: {
+    flexShrink: 0,
+    background: "#000",
+    border: "1px solid #333",
+    padding: "6px 10px",
+    borderRadius: 10,
+    fontSize: 12,
+    fontFamily: "monospace",
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  chipX: {
+    background: "#222",
+    border: "none",
+    color: "#fff",
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    fontSize: 12,
+    cursor: "pointer",
+    display: "grid",
+    placeItems: "center",
+  },
+
+  actionArea: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderTop: "1px solid #222",
+    paddingTop: 14,
+  },
+  totalValue: { fontSize: 20, fontWeight: 900, letterSpacing: -0.5 },
+  cta: {
+    background: "#fff",
+    color: "#000",
+    border: "none",
+    padding: "12px 28px",
+    borderRadius: 14,
+    fontWeight: 800,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+
+  // --- MODAL ---
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.9)",
+    backdropFilter: "blur(8px)",
+    display: "grid",
+    placeItems: "center",
+    zIndex: 100,
+    padding: 20,
+  },
+  modal: {
+    background: "#0a0a0a",
+    border: "1px solid #222",
+    padding: 24,
+    borderRadius: 30,
+    width: "100%",
+    maxWidth: 350,
+  },
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalClose: {
+    background: "#1a1a1a",
+    border: "none",
+    color: "#fff",
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    cursor: "pointer",
+    fontSize: 18,
+  },
+};
