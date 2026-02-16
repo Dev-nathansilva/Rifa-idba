@@ -169,7 +169,7 @@ export default function PagarPage() {
             </p>
 
             <a
-              href="https://wa.me/5585999999999"
+              href="https://wa.me/5585997416242"
               target="_blank"
               rel="noreferrer"
               style={styles.importantBtn}
@@ -304,7 +304,7 @@ export default function PagarPage() {
         {/* Footer actions */}
         <div style={styles.footerActions}>
           <a
-            href="https://instagram.com/SEU_INSTA_AQUI"
+            href="https://instagram.com/idbaldeota"
             target="_blank"
             rel="noreferrer"
             style={styles.instagramBtn}
