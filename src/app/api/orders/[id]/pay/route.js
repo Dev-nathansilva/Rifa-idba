@@ -45,7 +45,7 @@ export async function POST(req, ctx) {
     merchantCity: process.env.PIX_MERCHANT_CITY || "FORTALEZA",
     amount,
     txid,
-    description: `Pedido ${id.slice(0, 8)}`,
+    description: "Pagamento da Rifa IDBA MOTO",
   });
 
   // 5) Salva/atualiza em payments (1 por pedido)
