@@ -6,6 +6,7 @@ import { supabasePublic } from "@/lib/supabasePublic";
 import Image from "next/image";
 import LoadingScreen from "@/components/LoadingScreen";
 import { IoDocumentText } from "react-icons/io5";
+import { FiArrowUp } from "react-icons/fi";
 
 function pad4(n) {
   return String(n).padStart(4, "0");
@@ -30,6 +31,21 @@ export default function RifaPage() {
   const [buyerTicketNumber, setBuyerTicketNumber] = useState(null);
 
   const [hasSavedCheckout, setHasSavedCheckout] = useState(false);
+
+  const [showTopBtn, setShowTopBtn] = useState(false);
+
+  useEffect(() => {
+    function handleScroll() {
+      setShowTopBtn(window.scrollY > 300); // aparece após 300px
+    }
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   useEffect(() => {
     async function load() {
@@ -405,6 +421,16 @@ export default function RifaPage() {
         </div>
       )}
 
+      {showTopBtn && (
+        <button
+          onClick={scrollToTop}
+          className="bottom-50 md:bottom-4 "
+          style={styles.scrollTopBtn}
+        >
+          <FiArrowUp size={20} />
+        </button>
+      )}
+
       {buyerModalOpen && (
         <div
           onClick={() => setBuyerModalOpen(false)}
@@ -761,5 +787,23 @@ const styles = {
     maxWidth: 520,
     width: "100%",
     boxShadow: "0 16px 40px rgba(0,0,0,0.55)",
+  },
+  scrollTopBtn: {
+    position: "fixed",
+    right: 16,
+    width: 40,
+    height: 40,
+    fontSize: 12,
+    borderRadius: "50%",
+    border: "1px solid #222",
+    background: "#111",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    zIndex: 80,
+    boxShadow: "0 10px 25px rgba(0,0,0,0.6)",
+    transition: "all 0.2s ease",
   },
 };
