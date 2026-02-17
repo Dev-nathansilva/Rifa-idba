@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FiFilter, FiRefreshCw, FiX, FiChevronDown } from "react-icons/fi";
 import { FiTrash2 } from "react-icons/fi";
 import LoadingScreen from "@/components/LoadingScreen";
+import { FiArrowLeft } from "react-icons/fi";
 
 function money(cents) {
   return `R$ ${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -71,6 +73,8 @@ export default function AdminOrdersPage() {
 
   // session boot
   const [checkingSession, setCheckingSession] = useState(true);
+
+  const router = useRouter();
 
   useEffect(() => {
     let alive = true;
@@ -307,7 +311,9 @@ export default function AdminOrdersPage() {
             paddingTop: 80,
           }}
         >
-          <h2 style={{ margin: 0, fontWeight: 900 }}>Admin</h2>
+          <h2 style={{ margin: 0, fontWeight: 900 }}>
+            Painel Administrador IDBA
+          </h2>
           <p style={{ opacity: 0.6, marginTop: 8 }}>
             Entre para visualizar e gerenciar pedidos.
           </p>
@@ -581,6 +587,14 @@ export default function AdminOrdersPage() {
         </div>
       </main>
 
+      <button
+        onClick={() => router.push("/rifa")}
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[999] flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-extrabold text-black shadow-lg hover:bg-gray-200 active:scale-[0.98] transition"
+      >
+        <FiArrowLeft size={18} />
+        Voltar para rifa
+      </button>
+
       <style jsx global>{`
         .spin {
           animation: spin 1s linear infinite;
@@ -697,7 +711,7 @@ const styles = {
     cursor: "pointer",
   },
 
-  content: { maxWidth: 1200, margin: "0 auto", padding: "20px" },
+  content: { maxWidth: 1200, margin: "0 auto", padding: "20px 20px 90px 20px" },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))",

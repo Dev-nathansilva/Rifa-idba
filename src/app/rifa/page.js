@@ -292,12 +292,12 @@ export default function RifaPage() {
 
             {/* Link do Regulamento adicionado aqui */}
             <a
-              href="https://idba.framer.website/regulamento"
+              href="https://idba.framer.website"
               target="_blank"
               style={styles.rulesLink}
             >
               <IoDocumentText size={16} />
-              <span>Regulamento</span>
+              <span>Prêmio / Regulamento</span>
             </a>
           </div>
           <button
