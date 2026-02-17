@@ -295,7 +295,11 @@ export default function RifaPage() {
           </div>
         )}
 
-        {errorMsg && <div style={styles.errorBox}>{errorMsg}</div>}
+        {errorMsg ? (
+          <div style={styles.toastWrap}>
+            <div style={styles.toast}>{errorMsg}</div>
+          </div>
+        ) : null}
 
         <div style={styles.filterSection}>
           <div style={styles.filters}>
@@ -733,5 +737,29 @@ const styles = {
     textDecoration: "none",
     transition: "color 0.2s",
     cursor: "pointer",
+  },
+  toastWrap: {
+    position: "fixed",
+    left: 0,
+    right: 0,
+    top: 12,
+    zIndex: 9999,
+    display: "flex",
+    justifyContent: "center",
+    padding: "0 12px",
+    pointerEvents: "none", // não atrapalha clique nos tickets
+  },
+  toast: {
+    pointerEvents: "auto",
+    background: "rgba(26,0,0,0.92)",
+    border: "1px solid rgba(255,68,68,0.55)",
+    color: "#ffb4b4",
+    padding: "12px 14px",
+    borderRadius: 14,
+    fontSize: 12,
+    fontWeight: 800,
+    maxWidth: 520,
+    width: "100%",
+    boxShadow: "0 16px 40px rgba(0,0,0,0.55)",
   },
 };
