@@ -1,25 +1,34 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { adminOnly } from "@/lib/adminRoute";
 
-function assertAdmin(req) {
-  const token = req.headers.get("x-admin-token");
-  return process.env.ADMIN_TOKEN && token === process.env.ADMIN_TOKEN;
-}
+const DELETE_PASSWORD = "APAGAR123"; // 👈 pode deixar fixa
 
 export async function POST(req, ctx) {
-  if (!assertAdmin(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  return adminOnly(req, ctx, async () => {
+    const { id } = await ctx.params;
+    const body = await req.json();
+    const password = body?.password;
 
-  const { id } = await ctx.params;
+    if (!id) {
+      return NextResponse.json({ error: "id ausente" }, { status: 400 });
+    }
 
-  const { error } = await supabaseAdmin.rpc("delete_order_cascade", {
-    p_order_id: id,
+    if (password !== DELETE_PASSWORD) {
+      return NextResponse.json(
+        { error: "Senha incorreta para exclusão" },
+        { status: 403 },
+      );
+    }
+
+    const { error } = await supabaseAdmin.rpc("delete_order_force", {
+      p_order_id: id,
+    });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+
+    return NextResponse.json({ ok: true });
   });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 409 });
-  }
-
-  return NextResponse.json({ ok: true });
 }

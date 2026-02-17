@@ -235,6 +235,19 @@ export default function CheckoutPage() {
     setSaving(true);
     setErrorMsg("");
 
+    console.log(
+      "ENVIANDO buyer_phone:",
+      form.buyer_phone,
+      "digits:",
+      onlyDigits(form.buyer_phone),
+    );
+    console.log(
+      "ENVIANDO buyer_document:",
+      form.buyer_document,
+      "digits:",
+      onlyDigits(form.buyer_document),
+    );
+
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -311,7 +324,7 @@ export default function CheckoutPage() {
               )}
             </Field>
 
-            <Field label="Telefone com DDD *">
+            <Field label="DDD + Telefone *">
               <input
                 value={form.buyer_phone}
                 onChange={(e) =>

@@ -30,7 +30,7 @@ export async function POST(req) {
 
     // valida buyer (mínimo)
     const buyer_name = String(buyer?.buyer_name || "").trim();
-    const buyer_phone = onlyDigits(buyer?.buyer_phone);
+    const buyer_phone = String(buyer?.buyer_phone || "").trim();
 
     if (buyer_name.length < 2) {
       return NextResponse.json(
@@ -39,7 +39,9 @@ export async function POST(req) {
       );
     }
 
-    if (buyer_phone.length < 10) {
+    const buyer_phone_digits = onlyDigits(buyer_phone);
+
+    if (buyer_phone_digits.length < 10) {
       return NextResponse.json(
         { error: "buyer_phone inválido (DDD + número)" },
         { status: 400 },

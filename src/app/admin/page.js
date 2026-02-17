@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { FiFilter, FiRefreshCw, FiEye, FiEyeOff, FiX } from "react-icons/fi";
+import { useEffect, useMemo, useState } from "react";
+import { FiFilter, FiRefreshCw, FiX, FiChevronDown } from "react-icons/fi";
+import { FiTrash2 } from "react-icons/fi";
+import LoadingScreen from "@/components/LoadingScreen";
 
 function money(cents) {
   return `R$ ${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -13,7 +15,6 @@ function fmtDate(s) {
     return s || "";
   }
 }
-
 function statusLabel(s) {
   if (s === "pending_payment") return "Aguardando";
   if (s === "paid") return "Pago";
@@ -21,40 +22,136 @@ function statusLabel(s) {
   if (s === "reserved") return "Reservado";
   return s || "-";
 }
-
-// Mantendo as cores das labels (badges) originais
 function statusColors(status) {
   if (status === "paid") return { bg: "#16a34a", fg: "#fff" };
   if (status === "pending_payment") return { bg: "#1e293b", fg: "#fff" };
-  if (status === "canceled") return { bg: "#ef4444", fg: "#fff" }; // Vermelho mantido aqui
+  if (status === "canceled") return { bg: "#ef4444", fg: "#fff" };
   return { bg: "#f59e0b", fg: "#111827" };
 }
-
 function onlyDigits(s) {
   return String(s || "").replace(/\D/g, "");
 }
 
+function maskPhone(value) {
+  const digits = String(value || "")
+    .replace(/\D/g, "")
+    .slice(0, 11);
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10)
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+const DEFAULT_FILTERS = {
+  q: "",
+  ticketQ: "",
+  status: "all",
+  phone: "",
+};
+
 export default function AdminOrdersPage() {
-  const [token, setToken] = useState("");
-  const [showToken, setShowToken] = useState(false);
+  // auth
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [authOk, setAuthOk] = useState(false);
+
+  // data
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [actingId, setActingId] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
 
+  // filters (aplicado vs rascunho)
   const [showFilters, setShowFilters] = useState(false);
-  const [q, setQ] = useState("");
-  const [ticketQ, setTicketQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [draftFilters, setDraftFilters] = useState(DEFAULT_FILTERS);
 
-  async function load() {
-    if (!token) return;
+  // session boot
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/me");
+        if (!alive) return;
+
+        if (res.ok) {
+          setAuthOk(true);
+          await load(); // carrega pedidos
+        } else {
+          setAuthOk(false);
+        }
+      } catch {
+        if (alive) setAuthOk(false);
+      } finally {
+        if (alive) setCheckingSession(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function login() {
+    setErrorMsg("");
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/orders?limit=2000", {
-        headers: { "x-admin-token": token },
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user, pass }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Erro no login");
+      setAuthOk(true);
+      await load();
+    } catch (e) {
+      setAuthOk(false);
+      setErrorMsg(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function logout() {
+    setLoading(true);
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+    } finally {
+      setAuthOk(false);
+      setOrders([]);
+      setUser("");
+      setPass("");
+      setErrorMsg("");
+
+      // ✅ reseta filtros SEM quebrar o shape (inclui phone)
+      setFilters(DEFAULT_FILTERS);
+      setDraftFilters(DEFAULT_FILTERS);
+      setShowFilters(false);
+
+      setLoading(false);
+    }
+  }
+
+  async function load() {
+    setErrorMsg("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/orders?limit=2000");
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        setAuthOk(false);
+        throw new Error("Não autorizado");
+      }
+
       if (!res.ok) throw new Error(data?.error || "Erro");
       setOrders(data.orders || []);
       setShowFilters(false);
@@ -71,11 +168,18 @@ export default function AdminOrdersPage() {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/approve`, {
         method: "POST",
-        headers: { "x-admin-token": token },
       });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        setAuthOk(false);
+        throw new Error("Não autorizado");
+      }
+
+      if (!res.ok) throw new Error(data?.error || "Erro ao aprovar");
       await load();
     } catch (e) {
-      alert("Erro ao aprovar");
+      alert(e.message || "Erro ao aprovar");
     } finally {
       setActingId(null);
     }
@@ -87,11 +191,51 @@ export default function AdminOrdersPage() {
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/cancel`, {
         method: "POST",
-        headers: { "x-admin-token": token },
       });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        setAuthOk(false);
+        throw new Error("Não autorizado");
+      }
+
+      if (!res.ok) throw new Error(data?.error || "Erro ao cancelar");
       await load();
     } catch (e) {
-      alert("Erro ao cancelar");
+      alert(e.message || "Erro ao cancelar");
+    } finally {
+      setActingId(null);
+    }
+  }
+
+  async function removeOrder(orderId) {
+    const password = prompt("Digite a senha para apagar o pedido:");
+
+    if (!password) return;
+
+    if (
+      !confirm(
+        "Isso irá apagar permanentemente o pedido e liberar os números. Confirmar?",
+      )
+    )
+      return;
+
+    setActingId(orderId);
+
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/delete`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) throw new Error(data?.error || "Erro ao apagar");
+
+      await load();
+    } catch (e) {
+      alert(e.message);
     } finally {
       setActingId(null);
     }
@@ -105,27 +249,118 @@ export default function AdminOrdersPage() {
         .filter((n) => !Number.isNaN(n))
         .sort((a, b) => a - b),
     }));
-    const query = q.trim().toLowerCase();
-    const tNum = ticketQ.trim().length ? Number(onlyDigits(ticketQ)) : null;
 
-    if (statusFilter !== "all")
-      filtered = filtered.filter((o) => o.status === statusFilter);
+    // ✅ blindado contra undefined
+    const query = String(filters?.q || "")
+      .trim()
+      .toLowerCase();
+
+    const ticketStr = String(filters?.ticketQ || "").trim();
+    const tNum = ticketStr.length ? Number(onlyDigits(ticketStr)) : null;
+
+    const status = String(filters?.status || "all");
+    const phoneStr = String(filters?.phone || "").trim();
+    const phoneDigits = onlyDigits(phoneStr);
+
+    if (status !== "all")
+      filtered = filtered.filter((o) => o.status === status);
+
     if (tNum !== null)
       filtered = filtered.filter((o) => o.numbers.includes(tNum));
+
+    // telefone separado (robusto: compara só dígitos)
+    if (phoneDigits) {
+      filtered = filtered.filter((o) =>
+        onlyDigits(o.buyer_phone).includes(phoneDigits),
+      );
+    }
+
+    // busca geral (sem telefone pra evitar confusão)
     if (query) {
       filtered = filtered.filter((o) =>
-        [o.buyer_name, o.buyer_phone, o.buyer_email, o.buyer_document].some(
-          (f) =>
-            String(f || "")
-              .toLowerCase()
-              .includes(query),
+        [o.buyer_name, o.buyer_email, o.buyer_document].some((f) =>
+          String(f || "")
+            .toLowerCase()
+            .includes(query),
         ),
       );
     }
+
     return filtered.sort(
       (a, b) => new Date(b.created_at) - new Date(a.created_at),
     );
-  }, [orders, q, ticketQ, statusFilter]);
+  }, [orders, filters]);
+
+  if (checkingSession) {
+    return <LoadingScreen label="Carregando admin" />;
+  }
+
+  // ---------- UI ----------
+  if (!authOk) {
+    return (
+      <div style={styles.page}>
+        <div
+          style={{
+            maxWidth: 420,
+            margin: "0 auto",
+            padding: 24,
+            paddingTop: 80,
+          }}
+        >
+          <h2 style={{ margin: 0, fontWeight: 900 }}>Admin</h2>
+          <p style={{ opacity: 0.6, marginTop: 8 }}>
+            Entre para visualizar e gerenciar pedidos.
+          </p>
+
+          {errorMsg ? (
+            <div
+              style={{
+                background: "rgba(239,68,68,0.15)",
+                border: "1px solid rgba(239,68,68,0.35)",
+                padding: 12,
+                borderRadius: 12,
+                marginTop: 12,
+              }}
+            >
+              <div style={{ fontWeight: 800 }}>Erro</div>
+              <div style={{ opacity: 0.8, marginTop: 4 }}>{errorMsg}</div>
+            </div>
+          ) : null}
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              marginTop: 16,
+            }}
+          >
+            <input
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+              placeholder="Usuário"
+              style={styles.input}
+              autoComplete="username"
+            />
+            <input
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              placeholder="Senha"
+              type="password"
+              style={styles.input}
+              autoComplete="current-password"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") login();
+              }}
+            />
+            <button onClick={login} disabled={loading} style={styles.applyBtn}>
+              {loading ? "Entrando..." : "Entrar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.page}>
@@ -133,35 +368,41 @@ export default function AdminOrdersPage() {
         <div style={styles.headerContent}>
           <div style={styles.navMain}>
             <div style={styles.tokenArea}>
-              <div style={styles.inputIconWrapper}>
-                <input
-                  type={showToken ? "text" : "password"}
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder="Token Admin"
-                  style={styles.tokenInput}
-                />
-                <button
-                  onClick={() => setShowToken(!showToken)}
-                  style={styles.iconBtn}
-                >
-                  {showToken ? <FiEyeOff /> : <FiEye />}
-                </button>
-              </div>
               <button onClick={load} disabled={loading} style={styles.syncBtn}>
                 <FiRefreshCw className={loading ? "spin" : ""} />
                 <span className="hide-mobile" style={{ marginLeft: 8 }}>
                   Sincronizar
                 </span>
               </button>
+
+              <button
+                onClick={logout}
+                disabled={loading}
+                style={{
+                  ...styles.filterToggle,
+                  background: "#0b1220",
+                }}
+              >
+                Sair
+              </button>
             </div>
+
             <button
-              onClick={() => setShowFilters(true)}
+              onClick={() => {
+                setDraftFilters({ ...DEFAULT_FILTERS, ...filters }); // ✅ garante shape
+                setShowFilters(true);
+              }}
               style={styles.filterToggle}
             >
               <FiFilter /> Filtros {rows.length > 0 && `(${rows.length})`}
             </button>
           </div>
+
+          {errorMsg ? (
+            <div style={{ marginTop: 10, opacity: 0.7, fontSize: 13 }}>
+              {errorMsg}
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -177,31 +418,59 @@ export default function AdminOrdersPage() {
                 <FiX size={24} />
               </button>
             </div>
+
             <div style={styles.modalBody}>
               <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Nome, Celular, CPF ou E-mail"
+                value={draftFilters.q}
+                onChange={(e) =>
+                  setDraftFilters((p) => ({ ...p, q: e.target.value }))
+                }
+                placeholder="Nome, CPF ou E-mail"
                 style={styles.input}
               />
+
               <input
-                value={ticketQ}
-                onChange={(e) => setTicketQ(e.target.value)}
+                value={draftFilters.phone}
+                onChange={(e) =>
+                  setDraftFilters((p) => ({
+                    ...p,
+                    phone: maskPhone(e.target.value),
+                  }))
+                }
+                placeholder="Telefone"
+                style={styles.input}
+              />
+
+              <input
+                value={draftFilters.ticketQ}
+                onChange={(e) =>
+                  setDraftFilters((p) => ({ ...p, ticketQ: e.target.value }))
+                }
                 placeholder="Número do Ticket"
                 style={styles.input}
               />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={styles.input}
-              >
-                <option value="all">Todos os Status</option>
-                <option value="pending_payment">Aguardando</option>
-                <option value="paid">Pago</option>
-                <option value="canceled">Cancelado</option>
-              </select>
+
+              <div style={styles.selectWrapper}>
+                <select
+                  value={draftFilters.status}
+                  onChange={(e) =>
+                    setDraftFilters((p) => ({ ...p, status: e.target.value }))
+                  }
+                  style={styles.select}
+                >
+                  <option value="all">Todos os Status</option>
+                  <option value="pending_payment">Aguardando</option>
+                  <option value="paid">Pago</option>
+                  <option value="canceled">Cancelado</option>
+                </select>
+                <FiChevronDown style={styles.selectIcon} />
+              </div>
+
               <button
-                onClick={() => setShowFilters(false)}
+                onClick={() => {
+                  setFilters({ ...DEFAULT_FILTERS, ...draftFilters }); // ✅ garante shape
+                  setShowFilters(false);
+                }}
                 style={styles.applyBtn}
               >
                 Aplicar Filtros
@@ -269,7 +538,6 @@ export default function AdminOrdersPage() {
                     </span>
                   </div>
                   <div style={styles.actions}>
-                    {/* Botão Aprovar: Verde se pendente, Cinza se não */}
                     <button
                       onClick={() => approve(o.id)}
                       disabled={!isPending || busy}
@@ -282,7 +550,6 @@ export default function AdminOrdersPage() {
                     >
                       APROVAR
                     </button>
-                    {/* Botão Cancelar: Vermelho se puder cancelar, Cinza se não */}
                     <button
                       onClick={() => cancel(o.id)}
                       disabled={isPaid || isCanceled || busy}
@@ -298,6 +565,15 @@ export default function AdminOrdersPage() {
                       CANCELAR
                     </button>
                   </div>
+
+                  <button
+                    onClick={() => removeOrder(o.id)}
+                    disabled={busy}
+                    className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold text-white bg-gray-600 hover:bg-red-700 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <FiTrash2 size={16} />
+                    APAGAR
+                  </button>
                 </div>
               </div>
             );
@@ -342,29 +618,8 @@ const styles = {
   },
   headerContent: { maxWidth: 1200, margin: "0 auto" },
   navMain: { display: "flex", gap: 10, flexWrap: "wrap" },
-  tokenArea: { display: "flex", gap: 8, flex: 1, minWidth: "260px" },
-  inputIconWrapper: { position: "relative", flex: 1 },
-  tokenInput: {
-    width: "100%",
-    background: "#000",
-    border: "1px solid #1e293b",
-    padding: "12px 40px 12px 12px",
-    borderRadius: 12,
-    color: "#fff",
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  iconBtn: {
-    position: "absolute",
-    right: 10,
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "none",
-    border: "none",
-    color: "#475569",
-    cursor: "pointer",
-    fontSize: 18,
-  },
+  tokenArea: { display: "flex", gap: 8, flex: 1 },
+
   syncBtn: {
     background: "#fff",
     color: "#000",
@@ -391,6 +646,7 @@ const styles = {
     fontWeight: 700,
     cursor: "pointer",
   },
+
   modalOverlay: {
     position: "fixed",
     inset: 0,
@@ -421,6 +677,7 @@ const styles = {
     cursor: "pointer",
   },
   modalBody: { display: "flex", flexDirection: "column", gap: 12 },
+
   input: {
     background: "#060a13",
     border: "1px solid #1e293b",
@@ -439,10 +696,11 @@ const styles = {
     marginTop: 8,
     cursor: "pointer",
   },
+
   content: { maxWidth: 1200, margin: "0 auto", padding: "20px" },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))",
     gap: 16,
   },
   card: {
@@ -518,5 +776,33 @@ const styles = {
     fontWeight: 900,
     fontSize: 11,
     transition: "0.2s",
+  },
+
+  selectWrapper: {
+    position: "relative",
+  },
+
+  select: {
+    width: "100%",
+    background: "#060a13",
+    border: "1px solid #1e293b",
+    padding: "14px 44px 14px 14px",
+    borderRadius: 12,
+    color: "#fff",
+    outline: "none",
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    cursor: "pointer",
+  },
+
+  selectIcon: {
+    position: "absolute",
+    right: 14,
+    top: "50%",
+    transform: "translateY(-50%)",
+    pointerEvents: "none",
+    color: "#94a3b8",
+    fontSize: 18,
   },
 };
