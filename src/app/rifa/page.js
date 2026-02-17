@@ -34,6 +34,24 @@ export default function RifaPage() {
 
   const [showTopBtn, setShowTopBtn] = useState(false);
 
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+
+    // compatível com browsers antigos
+    if (mq.addEventListener) mq.addEventListener("change", apply);
+    else mq.addListener(apply);
+
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener("change", apply);
+      else mq.removeListener(apply);
+    };
+  }, []);
+
   useEffect(() => {
     function handleScroll() {
       setShowTopBtn(window.scrollY > 300); // aparece após 300px
@@ -424,8 +442,11 @@ export default function RifaPage() {
       {showTopBtn && (
         <button
           onClick={scrollToTop}
-          className="bottom-50 md:bottom-4 "
-          style={styles.scrollTopBtn}
+          style={{
+            ...styles.scrollTopBtn,
+            bottom: isMobile && selected.length > 0 ? 200 : 16, // ✅ só muda no mobile
+          }}
+          aria-label="Voltar ao topo"
         >
           <FiArrowUp size={20} />
         </button>
