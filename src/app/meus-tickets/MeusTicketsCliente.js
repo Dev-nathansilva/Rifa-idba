@@ -106,7 +106,7 @@ export default function MeusTicketsClient() {
     try {
       const qs = new URLSearchParams();
       // ✅ manda só dígitos para funcionar mesmo com telefone salvo formatado no banco
-      qs.set("phone", phoneDigits);
+      qs.set("phone", phone);
       if (raffleId) qs.set("raffleId", raffleId);
 
       const res = await fetch(`/api/my-orders?${qs.toString()}`);

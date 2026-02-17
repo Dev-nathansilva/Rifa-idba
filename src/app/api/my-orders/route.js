@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-function normalizePhone(phone) {
-  return String(phone || "").replace(/\D/g, "");
-}
-
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const phoneRaw = searchParams.get("phone");
-  const raffleId = searchParams.get("raffleId"); // opcional
+  const phone = (searchParams.get("phone") || "").trim(); // formatado
+  const raffleId = searchParams.get("raffleId");
 
-  const phone = normalizePhone(phoneRaw);
   if (!phone) {
     return NextResponse.json({ error: "phone é obrigatório" }, { status: 400 });
   }
