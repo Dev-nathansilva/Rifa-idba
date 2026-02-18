@@ -407,7 +407,7 @@ export default function CheckoutPage() {
             </button>
 
             <div style={styles.disclaimer}>
-              Os números ficam reservados por 15 minutos após o clique.
+              Os números ficam reservados após o clique.
             </div>
           </div>
 
