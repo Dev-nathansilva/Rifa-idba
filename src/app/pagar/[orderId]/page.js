@@ -296,8 +296,9 @@ export default function PagarPage() {
         <div style={styles.infoBox}>
           <div style={styles.infoIcon}>i</div>
           <p style={styles.infoText}>
-            Após o pagamento, seu pedido será processado automaticamente. A
-            reserva expira em <b>15 minutos</b>.
+            <b className="text-gray-400">Após o pagamento</b>, seu pedido será
+            processado em até 24 horas. Os números do pedido estarão{" "}
+            <b>reservados</b> até serem aprovados.
           </p>
         </div>
 
