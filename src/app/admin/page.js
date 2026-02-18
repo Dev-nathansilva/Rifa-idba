@@ -52,7 +52,40 @@ const DEFAULT_FILTERS = {
   ticketQ: "",
   status: "all",
   phone: "",
+  igreja: "",
 };
+
+const IGREJAS = [
+  "Sem igreja",
+  "IDB Aldeota",
+  "IDB Centro",
+  "IDB Aerolândia",
+  "IDB Conjunto Ceará",
+  "IDB Parque Dois Irmãos",
+  "IDB Jardim Castelão",
+  "IDB Goiabeiras",
+  "IDB Vila União",
+  "IDB Parque Boa Vista",
+  "IDB Araturi",
+  "IDB Vila Velha",
+  "IDB São Francisco",
+  "IDB Barroso",
+  "IDB Icaraí",
+  "IDB Jurema",
+  "IDB Parque Santa Rosa",
+  "IDB Planalto Ayrton Senna",
+  "IDB Maracanaú",
+  "IDB Granja Lisboa",
+  "IDB Lago Verde",
+  "IDB Conjunto Metropolitano",
+  "IDB Acarape",
+  "IDB Brotas",
+  "IDB Tianguá",
+  "IDB Sobral",
+  "IDB Lagoa do Juvenal",
+  "IDB Juá",
+  "Outra",
+];
 
 export default function AdminOrdersPage() {
   // auth
@@ -279,7 +312,6 @@ export default function AdminOrdersPage() {
       );
     }
 
-    // busca geral (sem telefone pra evitar confusão)
     if (query) {
       filtered = filtered.filter((o) =>
         [o.buyer_name, o.buyer_email, o.buyer_document].some((f) =>
@@ -287,6 +319,18 @@ export default function AdminOrdersPage() {
             .toLowerCase()
             .includes(query),
         ),
+      );
+    }
+
+    const igreja = String(filters?.igreja || "")
+      .trim()
+      .toLowerCase();
+
+    if (igreja) {
+      filtered = filtered.filter((o) =>
+        String(o.igreja_associada || "")
+          .toLowerCase()
+          .includes(igreja),
       );
     }
 
@@ -458,6 +502,24 @@ export default function AdminOrdersPage() {
 
               <div style={styles.selectWrapper}>
                 <select
+                  value={draftFilters.igreja}
+                  onChange={(e) =>
+                    setDraftFilters((p) => ({ ...p, igreja: e.target.value }))
+                  }
+                  style={styles.select}
+                >
+                  <option value="">Todas as igrejas</option>
+                  {IGREJAS.map((i) => (
+                    <option key={i} value={i}>
+                      {i}
+                    </option>
+                  ))}
+                </select>
+                <FiChevronDown style={styles.selectIcon} />
+              </div>
+
+              <div style={styles.selectWrapper}>
+                <select
                   value={draftFilters.status}
                   onChange={(e) =>
                     setDraftFilters((p) => ({ ...p, status: e.target.value }))
@@ -514,6 +576,10 @@ export default function AdminOrdersPage() {
                 <div style={styles.buyerDetails}>
                   <div style={styles.buyerExtra}>{o.buyer_email || "-"}</div>
                   <div style={styles.buyerExtra}>{o.buyer_document || "-"}</div>
+                  <div style={styles.buyerExtra}>
+                    Igreja: {o.igreja_associada}
+                  </div>
+
                   <div
                     style={{ ...styles.buyerExtra, marginTop: 4, opacity: 0.3 }}
                   >

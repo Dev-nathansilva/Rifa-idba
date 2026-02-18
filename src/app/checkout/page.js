@@ -3,6 +3,39 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import LoadingScreen from "@/components/LoadingScreen";
+import { FiChevronDown } from "react-icons/fi";
+
+const IGREJAS = [
+  "Sem igreja",
+  "IDB Aldeota",
+  "IDB Centro",
+  "IDB Aerolândia",
+  "IDB Conjunto Ceará",
+  "IDB Parque Dois Irmãos",
+  "IDB Jardim Castelão",
+  "IDB Goiabeiras",
+  "IDB Vila União",
+  "IDB Parque Boa Vista",
+  "IDB Araturi",
+  "IDB Vila Velha",
+  "IDB São Francisco",
+  "IDB Barroso",
+  "IDB Icaraí",
+  "IDB Jurema",
+  "IDB Parque Santa Rosa",
+  "IDB Planalto Ayrton Senna",
+  "IDB Maracanaú",
+  "IDB Granja Lisboa",
+  "IDB Lago Verde",
+  "IDB Conjunto Metropolitano",
+  "IDB Acarape",
+  "IDB Brotas",
+  "IDB Tianguá",
+  "IDB Sobral",
+  "IDB Lagoa do Juvenal",
+  "IDB Juá",
+  "Outra",
+];
 
 function pad4(n) {
   return String(n).padStart(4, "0");
@@ -87,6 +120,7 @@ export default function CheckoutPage() {
     buyer_phone: "",
     buyer_email: "",
     buyer_document: "",
+    igreja_associada: "",
   });
 
   // validação: mensagens por campo
@@ -95,6 +129,7 @@ export default function CheckoutPage() {
     buyer_phone: false,
     buyer_email: false,
     buyer_document: false,
+    igreja_associada: false,
   });
 
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -183,12 +218,20 @@ export default function CheckoutPage() {
     return "";
   }, [form.buyer_document]);
 
+  const igrejaError = useMemo(() => {
+    if (!form.igreja_associada) {
+      return "Selecione uma igreja.";
+    }
+    return "";
+  }, [form.igreja_associada]);
+
   const canContinue = useMemo(() => {
     return (
       !nameError &&
       !phoneError &&
       !emailError &&
       !cpfError &&
+      !igrejaError &&
       ticketNumbers.length > 0 &&
       !!raffle &&
       !saving
@@ -198,6 +241,7 @@ export default function CheckoutPage() {
     phoneError,
     emailError,
     cpfError,
+    igrejaError,
     ticketNumbers.length,
     raffle,
     saving,
@@ -228,25 +272,13 @@ export default function CheckoutPage() {
       buyer_phone: true,
       buyer_email: true,
       buyer_document: true,
+      igreja_associada: true,
     });
 
     if (!canContinue) return;
 
     setSaving(true);
     setErrorMsg("");
-
-    console.log(
-      "ENVIANDO buyer_phone:",
-      form.buyer_phone,
-      "digits:",
-      onlyDigits(form.buyer_phone),
-    );
-    console.log(
-      "ENVIANDO buyer_document:",
-      form.buyer_document,
-      "digits:",
-      onlyDigits(form.buyer_document),
-    );
 
     try {
       const res = await fetch("/api/orders", {
@@ -260,6 +292,7 @@ export default function CheckoutPage() {
             buyer_phone: form.buyer_phone.trim(),
             buyer_email: form.buyer_email.trim(),
             buyer_document: form.buyer_document.trim(),
+            igreja_associada: form.igreja_associada?.trim() || null,
           },
         }),
       });
@@ -391,6 +424,34 @@ export default function CheckoutPage() {
               />
               {showFieldError("buyer_document", cpfError) && (
                 <div style={styles.fieldError}>{cpfError}</div>
+              )}
+            </Field>
+
+            <Field label="Igreja associada *">
+              <div style={styles.selectWrapper}>
+                <select
+                  value={form.igreja_associada}
+                  onChange={(e) => onChange("igreja_associada", e.target.value)}
+                  onBlur={() => onBlur("igreja_associada")}
+                  style={{
+                    ...styles.select,
+                    ...(showFieldError("igreja_associada", igrejaError)
+                      ? styles.inputError
+                      : null),
+                  }}
+                >
+                  <option value="">Selecione</option>
+                  {IGREJAS.map((i) => (
+                    <option key={i} value={i}>
+                      {i}
+                    </option>
+                  ))}
+                </select>
+                <FiChevronDown style={styles.selectIcon} />
+              </div>
+
+              {showFieldError("igreja_associada", igrejaError) && (
+                <div style={styles.fieldError}>{igrejaError}</div>
               )}
             </Field>
 
@@ -674,5 +735,33 @@ const styles = {
     borderRadius: 12,
     fontSize: 13,
     border: "1px solid #440000",
+  },
+
+  selectWrapper: {
+    position: "relative",
+  },
+
+  select: {
+    width: "100%",
+    background: "#060a13",
+    border: "1px solid #1e293b",
+    padding: "14px 44px 14px 14px",
+    borderRadius: 12,
+    color: "#fff",
+    outline: "none",
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    cursor: "pointer",
+  },
+
+  selectIcon: {
+    position: "absolute",
+    right: 14,
+    top: "50%",
+    transform: "translateY(-50%)",
+    pointerEvents: "none",
+    color: "#94a3b8",
+    fontSize: 18,
   },
 };

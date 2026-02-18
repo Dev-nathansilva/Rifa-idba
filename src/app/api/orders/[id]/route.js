@@ -7,7 +7,7 @@ export async function GET(req, ctx) {
   const { data: order, error: orderError } = await supabaseAdmin
     .from("orders")
     .select(
-      "id,raffle_id,buyer_name,buyer_phone,buyer_email,buyer_document,status,total_cents,created_at",
+      "id,raffle_id,buyer_name,buyer_phone,buyer_email,buyer_document,igreja_associada,status,total_cents,created_at",
     )
     .eq("id", id)
     .single();

@@ -51,6 +51,9 @@ export async function POST(req) {
     const buyer_email = String(buyer?.buyer_email || "").trim() || null;
     const buyer_document = String(buyer?.buyer_document || "").trim() || null;
 
+    const igreja_associada =
+      String(buyer?.igreja_associada || "").trim() || null;
+
     // garantir inteiros únicos
     const uniqueNumbers = [...new Set(ticketNumbers.map((n) => Number(n)))];
     if (uniqueNumbers.some((n) => Number.isNaN(n) || n < 0)) {
@@ -89,6 +92,7 @@ export async function POST(req) {
         buyer_phone,
         buyer_email,
         buyer_document,
+        igreja_associada,
         status: "pending_payment",
       })
       .eq("id", orderId);

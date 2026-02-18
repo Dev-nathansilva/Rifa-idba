@@ -9,6 +9,7 @@ export async function PATCH(req, ctx) {
   const buyer_phone = body?.buyer_phone?.trim();
   const buyer_email = body?.buyer_email?.trim() || null;
   const buyer_document = body?.buyer_document?.trim() || null;
+  const igreja_associada = body?.igreja_associada?.trim() || null;
 
   if (!buyer_name || !buyer_phone) {
     return NextResponse.json(
@@ -19,10 +20,16 @@ export async function PATCH(req, ctx) {
 
   const { data, error } = await supabaseAdmin
     .from("orders")
-    .update({ buyer_name, buyer_phone, buyer_email, buyer_document })
+    .update({
+      buyer_name,
+      buyer_phone,
+      buyer_email,
+      buyer_document,
+      igreja_associada,
+    })
     .eq("id", id)
     .select(
-      "id,buyer_name,buyer_phone,buyer_email,buyer_document,status,total_cents",
+      "id,buyer_name,buyer_phone,buyer_email,buyer_document,igreja_associada,status,total_cents",
     )
     .single();
 

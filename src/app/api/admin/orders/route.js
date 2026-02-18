@@ -20,6 +20,7 @@ export async function GET(req, ctx) {
         buyer_phone,
         buyer_email,
         buyer_document,
+        igreja_associada,
         created_at,
         paid_at,
         canceled_at,

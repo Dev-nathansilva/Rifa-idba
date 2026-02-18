@@ -289,6 +289,7 @@ export default function PagarPage() {
               />
               <InfoLine label="E-mail" value={order?.buyer_email || "—"} />
               <InfoLine label="CPF" value={order?.buyer_document || "—"} />
+              <InfoLine label="Igreja" value={order?.igreja_associada || "—"} />
             </div>
           </div>
         </div>
