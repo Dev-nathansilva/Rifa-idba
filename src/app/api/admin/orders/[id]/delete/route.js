@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { adminOnly } from "@/lib/adminRoute";
 
-const DELETE_PASSWORD = "APAGAR123"; // 👈 pode deixar fixa
+const DELETE_PASSWORD = "DELETAR"; // 👈 pode deixar fixa
 
 export async function POST(req, ctx) {
   return adminOnly(req, ctx, async () => {
