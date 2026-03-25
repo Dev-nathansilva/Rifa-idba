@@ -153,7 +153,7 @@ export default function CheckoutPage() {
         : [];
 
       if (nums.length === 0) {
-        router.replace("/rifa");
+        router.replace("/sorteio");
         return;
       }
 
@@ -260,7 +260,7 @@ export default function CheckoutPage() {
   }
 
   function goBackToRaffle() {
-    router.push("/rifa");
+    router.push("/Sorteio");
   }
 
   async function continuarParaPagamento() {
@@ -475,7 +475,7 @@ export default function CheckoutPage() {
           {/* Resumo lateral */}
           <div style={styles.summaryCard} className="checkout-summary">
             <h2 style={styles.cardTitle}>Resumo</h2>
-            <div style={styles.raffleInfo}>Rifa: {raffle?.title}</div>
+            <div style={styles.raffleInfo}>Sorteio: {raffle?.title}</div>
 
             <div style={{ marginTop: 20 }}>
               <div style={styles.summaryLabel}>

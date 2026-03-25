@@ -58,7 +58,6 @@ const DEFAULT_FILTERS = {
 const IGREJAS = [
   "Sem igreja",
   "IDB Aldeota",
-  "IDB Centro",
   "IDB Aerolândia",
   "IDB Conjunto Ceará",
   "IDB Parque Dois Irmãos",
@@ -654,11 +653,11 @@ export default function AdminOrdersPage() {
       </main>
 
       <button
-        onClick={() => router.push("/rifa")}
+        onClick={() => router.push("/sorteio")}
         className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[999] flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-extrabold text-black shadow-lg hover:bg-gray-200 active:scale-[0.98] transition"
       >
         <FiArrowLeft size={18} />
-        Voltar para rifa
+        Voltar para sorteio
       </button>
 
       <style jsx global>{`

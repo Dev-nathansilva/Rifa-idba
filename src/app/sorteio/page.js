@@ -265,7 +265,7 @@ export default function RifaPage() {
     }
   }
 
-  if (loading) return <LoadingScreen label="Carregando rifa..." />;
+  if (loading) return <LoadingScreen label="Carregando sorteio..." />;
 
   return (
     <div style={styles.page}>

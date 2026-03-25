@@ -41,11 +41,11 @@ export async function POST(req, ctx) {
   // 4) Gera payload Pix
   const pix_copy_paste = generatePixCopyPaste({
     key: process.env.PIX_KEY,
-    merchantName: process.env.PIX_MERCHANT_NAME || "RIFA",
+    merchantName: process.env.PIX_MERCHANT_NAME || "SORTEIO",
     merchantCity: process.env.PIX_MERCHANT_CITY || "FORTALEZA",
     amount,
     txid,
-    description: "Pagamento da Rifa IDBA MOTO",
+    description: "Pagamento do Sorteio IDBA MOTO",
   });
 
   // 5) Salva/atualiza em payments (1 por pedido)

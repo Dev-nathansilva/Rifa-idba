@@ -169,7 +169,7 @@ export default function PagarPage() {
             </p>
 
             <a
-              href="https://wa.me/5585989598747?text=Ol%C3%A1%21%20Realizei%20o%20pagamento%20e%20estarei%20enviando%20o%20comprovante%20da%20Rifa%20da%20moto"
+              href="https://wa.me/5585989598747?text=Ol%C3%A1%21%20Realizei%20o%20pagamento%20e%20estarei%20enviando%20o%20comprovante%20do%20Sorteio%20da%20moto"
               target="_blank"
               rel="noreferrer"
               style={styles.importantBtn}
